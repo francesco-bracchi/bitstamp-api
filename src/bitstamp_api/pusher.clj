@@ -1,20 +1,16 @@
 (ns bitstamp-api.pusher)
 
-(def ^:dynamic *pusher* nil)
-
-(def ^:dynamic *channel* nil)
-
 (defn connection-listener [callback]
   (reify com.pusher.client.connection.ConnectionEventListener
-    (onConnectionStateChange [this change] 
-      (callback  {:change true
-                  :from (-> change .getCurrentState keyword)
-                  :to (-> change .getPreviousState keyword)}))
+      (println "connection-state-change")
+      (callback :change
+                :from (-> change .getCurrentState keyword)
+                :to (-> change .getPreviousState keyword)))
     (onError [this message code exception] 
-      (callback {:error true
-                 :message message 
-                 :code (keyword code)
-                 :exception exception}))))
+      (callback :error
+                :message message 
+                :code (keyword code)
+                :exception exception))))
 
 (defn channel-listener [callback]
   (reify com.pusher.client.channel.ChannelEventListener
@@ -29,24 +25,31 @@
 (defn pusher [key]
   (new com.pusher.client.Pusher key))
 
-(def ALL com.pusher.client.connection.ConnectionState/ALL)
+(def states
+  {:all com.pusher.client.connection.ConnectionState/ALL
+   :connecting com.pusher.client.connection.ConnectionState/CONNECTING
+   :connected com.pusher.client.connection.ConnectionState/CONNECTED
+   :disconnecting com.pusher.client.connection.ConnectionState/DISCONNECTING
+   :disconnected com.pusher.client.connection.ConnectionState/DISCONNECTED
+   })
 
 (defn connect 
-  ([callback] (connect callback *pusher*))
-  ([callback pusher]
-     (.connect (connection-listener callback) ALL)))
-
+  ([pusher]
+     (.connect pusher))
+  ([pusher callback] 
+     (connect pusher callback :connected))
+  ([pusher callback & ss]
+     (println (vec (into-array (map states ss))))
+     (.connect pusher (connection-listener callback) (into-array (map states ss)))))
+  
 (defn disconnect 
-  ([] (disconnect *pusher*))
-  ([pusher] (.disconnect pusher)))
+  [pusher] (.disconnect pusher))
 
-(defn channel 
-  ([channel-name callback] (channel channel-name *pusher*))
-  ([channel-name callback pusher]
-     (-> pusher (.subscribe channel-name (channel-listener callback)))))
+(defn channel
+  [pusher channel-name callback]
+  (.subscribe pusher channel-name (channel-listener callback) (into-array String [])))
 
-(defn bind 
-  ([event callback] (bind event callback *channel*))
-  ([event callback channel]
-     (.bind channel (subscription-listener callback))))
+;; (defn bind
+;;   ([channel event callback]
+;;      (.bind channel event (subscription-listener callback))))
 
