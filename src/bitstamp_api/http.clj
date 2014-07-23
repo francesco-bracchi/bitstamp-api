@@ -1,8 +1,7 @@
-(ns bitstamp-api.core
+(ns bitstamp-api.http
   (:require [org.httpkit.client :as http]
             [clojure.string :as string]
             [clj-json.core :as json]
-            [bitstamp-api.pusher :as pusher]
             ))
 
 (def ^{:dynamic true
@@ -273,15 +272,12 @@
   "get user transactions, parameters can be passed as keys (that are :limit :offset :order)
   i.e. (user-transactions :limit 10 :offest 10 :sort :asc)"
   [& {:keys [:limit :offset :sort] :as params}]
-  (map #(jsonify % (extend-transform :type 
-                                     {0 :deposit 
-                                      1 :withdrawal 
-                                      2 :market-trade}))
-          (-> :user_transactions 
-              (hpost (if (:sort params)
-                       (assoc params :sort (name (:sort params)))
-                       params))
-              :body)))
+  (map #(jsonify % (extend-transform :type {0 :deposit 1 :withdrawal 2 :market-trade}))
+       (-> :user_transactions 
+           (hpost (if (:sort params)
+                    (assoc params :sort (name (:sort params)))
+                    params))
+           :body)))
 
 (defn open-orders 
   "get the open orders of the current user"
