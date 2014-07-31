@@ -4,6 +4,12 @@
             [clj-json.core :as json]
             ))
 
+;; # Bitstamp http API
+;; 
+;; see [https://www.bitstamp.net/api/] for more information
+;; 
+;; the public API are accessible 
+
 (def ^{:dynamic true
       :doc "Bitstamp URL"}
   *bitstamp-url* "https://www.bitstamp.net/api/")
@@ -15,6 +21,11 @@
 ;; ## Bitstamp API keys
 ;;
 ;; These 3 dynamic variables are the ones used to interact with the private API.
+;; by default are initialized to the corresponding environment variables 
+;;
+;;     $BITSTAMP_KEY
+;;     $BITSTAMP_SECRET
+;;     $BITSTAMP_CLIENTID
 
 (def ^{:dynamic true
        :doc "Bitstamp API key"}
@@ -31,14 +42,14 @@
   *client-id* (System/getenv "BITSTAMP_CLIENTID"))
 
 (defn bitstamp-action-url 
-  "generate the action url"
+  "transform the action (a keyword like `:ticker`) to a url (like `\"https://www.bitstamp.net/api/ticker\"`)"
   [action]
   (str *bitstamp-url* (name action) "/"))
 
 (defn nonce 
   "generate a nonce using the local machine timestamp"
   []
-  (->(java.util.Date.) .getTime))
+  (-> (java.util.Date.) .getTime))
 
 (defn new-secret-key [key mac]
     (javax.crypto.spec.SecretKeySpec. (.getBytes key) (.getAlgorithm mac)))
@@ -124,7 +135,6 @@
 ;; 
 ;; the function `(jsonify o)` applies `transform` to all the pairs that forms the 
 ;; `o` map.
-
 (defn ident [x & rest] x)
 
 (defmulti transform
