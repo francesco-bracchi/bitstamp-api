@@ -15,13 +15,14 @@
 ;;           (do-something-with c)
 ;;           (recur (async/<! events)))))
 ;;
-;; Mainly the `pusher` and `channel` functions work as "synchronous" builders
-;; while bind is used directly returning a potentially infinite channel
+;; `pusher` and `channel` functions work as "synchronous" procedure call,
+;; while bind is used directly returning a (potentially infinite) async channel
 ;;
 ;; ## TODO
 ;;
-;; + if a pusher channel is closed the corresponding async channels have to be closed as well
-;; + provide an interface that transforms a channel in a lazy sequence
+;; + if a pusher or a channel is closed then the corresponding async channels have to be closed as well
+;;   probably this implies having a bookeeper for connections/events.
+;; + is it possible to have a function that maps an async channel to a lazy sequence?
 
 (defn pusher 
   "opens a new connection with the pusher server and returns a channel, that will be fed with
@@ -42,7 +43,7 @@
 
 (defn channel 
   "creates a new Channel object, returns an async channel that will be fed with the channel 
-  itself when the channel is actually setup"
+  itself when the channel is actually set up."
   [pusher name]
   (let [ch (async/chan 0)]
     (pusher/channel pusher name 
@@ -52,8 +53,8 @@
     ch))
 
 (defn bind 
-  "binds an event name to a pusher channel. returns a channel that will be fed with the 
-  subscribed events"
+  "binds an event name to a pusher channel. Returns a channel that will be fed with the 
+  subscribed events."
   ([channel event] (bind channel event 1))
   ([channel event size]
      (let [ch (async/chan size)]
