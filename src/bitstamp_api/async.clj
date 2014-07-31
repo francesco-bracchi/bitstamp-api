@@ -3,57 +3,61 @@
             [clj-json.core :as json]
             [clojure.core.async :as async]))
 
-(defn pusher [key]
-  (let [ch (async/chan)
-        pusher (pusher/pusher key)]
-    (pusher/connect pusher 
-                    (fn [type & args]
-                      (println "async/pusher")
-                      (async/go
-                        (case type
-                          :change (async/>! ch pusher)
-                          :error  (async/>! ch (assoc args :error true))))
-                      (async/close! ch)))
-    ch))
-    
+;; # Async API
+;; 
+;; This is a thin wrapper around the Pusher library that makes use of clojure async.
+;; 
+;;     (async/go
+;;       (let [pusher (async/<! (pusher "key"))
+;;             channel (async/<! (channel pusher "channel"))
+;;             events (bind channel "event")]
+;;         (loop [c (async/<! events)]
+;;           (do-something-with c)
+;;           (recur (async/<! events)))))
+;;
+;; Mainly the `pusher` and `channel` functions work as "synchronous" builders
+;; while bind is used directly returning a potentially infinite channel
+;;
+;; ## TODO
+;;
+;; + if a pusher channel is closed the corresponding async channels have to be closed as well
+;; + provide an interface that transforms a channel in a lazy sequence
 
-(defn channel [pusher channel-name]
-  (let [ch (async/chan 0)
-        pc (ref nil)]
-    (ref-set pc (pusher/channel pusher
-                                channel-name 
-                                (fn [name] (async/go (async/>! ch @pc)))))
+(defn pusher 
+  "opens a new connection with the pusher server and returns a channel, that will be fed with
+  The Pusher object once the connection is ready"
+  [key]
+  (let [ch (async/chan 0)]
+    (pusher/pusher key 
+                   (fn [pusher action data]
+                     (when (and (= action :change) (= (:current data) :connected))
+                       (async/go
+                         (async/>! ch pusher)
+                         (async/close! ch)))
+                     (when (= action :error)
+                       (async/go
+                         (async/>! ch nil)
+                         (async/close! ch)))))
     ch))
 
-(defn bind
-  ([channel event]
-     (bind channel event nil))
-  ([channel event channel-size]
-     (let [ch (async/chan channel-size)
-           event (if (vector? event) (into-array event) event)]
-       (pusher/bind event #(async/go (async/>! ch (json/parse-string %))) channel)
+(defn channel 
+  "creates a new Channel object, returns an async channel that will be fed with the channel 
+  itself when the channel is actually setup"
+  [pusher name]
+  (let [ch (async/chan 0)]
+    (pusher/channel pusher name 
+                    (fn [channel]
+                      (async/go (async/>! ch channel)
+                                (async/close! ch))))
+    ch))
+
+(defn bind 
+  "binds an event name to a pusher channel. returns a channel that will be fed with the 
+  subscribed events"
+  ([channel event] (bind channel event 1))
+  ([channel event size]
+     (let [ch (async/chan size)]
+       (pusher/bind channel event
+                    (fn [channel-name event-name data]
+                      (async/go (async/>! ch data))))
        ch)))
-
-;; (go (let [p (<! (pusher "key"))
-;;           c (<! (channel p "channel"))
-;;           d (<! (bind channel "event-name"))]
-;;       (loop []
-;;         (let [v (<! d)]
-;;           (do-something-with-d d)
-;;           (when (continue?) (recur))))
-;;       (.disconnect c)))
-
-(async/go (let [p (async/<! (pusher "de504dc5763aeef9ff52"))
-                _ (println 0)
-                c (async/<! (channel p "order_book"))
-                __ (println 0)
-                d (async/<! (bind channel "data"))]
-            
-            (println 2)
-            (loop [n 100]
-              (println 3)
-              (let [v (async/<! d)]
-                (print "data: ")
-                (println d)
-                (when (> n 0) (recur (- n 1)))))
-            (pusher/disconnect p)))

@@ -1,31 +1,7 @@
-(ns bitstamp-api.pusher)
+(ns bitstamp-api.pusher
+  (:require [clj-json.core :as json]))
 
-(defn connection-listener [callback]
-  (reify com.pusher.client.connection.ConnectionEventListener
-      (println "connection-state-change")
-      (callback :change
-                :from (-> change .getCurrentState keyword)
-                :to (-> change .getPreviousState keyword)))
-    (onError [this message code exception] 
-      (callback :error
-                :message message 
-                :code (keyword code)
-                :exception exception))))
-
-(defn channel-listener [callback]
-  (reify com.pusher.client.channel.ChannelEventListener
-    (onSubscriptionSucceeded [this channel-name]
-      (callback channel-name))))
-
-(defn subscription-listener [callback]
-  (reify com.pusher.client.channel.SubscriptionEventListener
-    (onEvent [this channel-name event-name data]
-      (callback channel-name event-name data))))
-
-(defn pusher [key]
-  (new com.pusher.client.Pusher key))
-
-(def states
+(def keyword->state
   {:all com.pusher.client.connection.ConnectionState/ALL
    :connecting com.pusher.client.connection.ConnectionState/CONNECTING
    :connected com.pusher.client.connection.ConnectionState/CONNECTED
@@ -33,23 +9,56 @@
    :disconnected com.pusher.client.connection.ConnectionState/DISCONNECTED
    })
 
+(def state->keyword 
+  (into {} (map (fn [[a b]] [b a]) keyword->state)))
+
+(defn connection-listener [pusher callback]
+  (reify com.pusher.client.connection.ConnectionEventListener
+    (onConnectionStateChange [this change]
+      (println "connection-state-change")
+      (callback pusher :change
+                {:current (-> change .getCurrentState state->keyword)
+                 :previous (-> change .getPreviousState state->keyword)}))
+    (onError [this message code exception] 
+      (callback pusher :error
+                {:message message 
+                 :code (keyword code)
+                 :exception exception}))))
+
+(defn channel-listener [ch callback]
+  (reify com.pusher.client.channel.ChannelEventListener
+    (onSubscriptionSucceeded [this channel-name]
+      (callback @ch))))
+
+(defn subscription-listener [callback]
+  (reify com.pusher.client.channel.SubscriptionEventListener
+    (onEvent [this ^:string channel-name ^:string event-name ^:string data]
+      (callback channel-name event-name (json/parse-string data true)))))
+
+
+(defn new-pusher 
+  [key] (new com.pusher.client.Pusher key))
+
 (defn connect 
-  ([pusher]
-     (.connect pusher))
   ([pusher callback] 
      (connect pusher callback :connected))
-  ([pusher callback & ss]
-     (println (vec (into-array (map states ss))))
-     (.connect pusher (connection-listener callback) (into-array (map states ss)))))
-  
+  ([pusher callback & states]
+     (.connect pusher (connection-listener pusher callback) (into-array (map keyword->state states)))))
+
 (defn disconnect 
   [pusher] (.disconnect pusher))
 
+(defn pusher [key callback]
+  (let [pusher (new-pusher key)]
+    (connect pusher callback)))
+
 (defn channel
-  [pusher channel-name callback]
-  (.subscribe pusher channel-name (channel-listener callback) (into-array String [])))
+  [p channel-name callback]
+  (let [ch (atom nil)]
+    (swap! ch (fn [_] 
+                (.subscribe p (name channel-name) (channel-listener ch callback) (into-array String []))))
+    @ch))
 
-;; (defn bind
-;;   ([channel event callback]
-;;      (.bind channel event (subscription-listener callback))))
-
+(defn bind
+  [channel event callback]
+  (.bind channel (name event) (subscription-listener callback)))
