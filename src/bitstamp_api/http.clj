@@ -1,14 +1,14 @@
-(ns bitstamp-api.http
-  (:require [org.httpkit.client :as http]
-            [clojure.string :as string]
-            [clj-json.core :as json]
-            ))
-
 ;; # Bitstamp http API
 ;; 
 ;; see [https://www.bitstamp.net/api/] for more information
 ;; 
 ;; the public API are accessible 
+;;
+(ns bitstamp-api.http
+  (:require [org.httpkit.client :as http]
+            [clojure.string :as string]
+            [clj-json.core :as json]
+            ))
 
 (def ^{:dynamic true
       :doc "Bitstamp URL"}
@@ -26,7 +26,7 @@
 ;;     $BITSTAMP_KEY
 ;;     $BITSTAMP_SECRET
 ;;     $BITSTAMP_CLIENTID
-
+;;
 (def ^{:dynamic true
        :doc "Bitstamp API key"}
   *key* (System/getenv "BITSTAMP_KEY"))
@@ -171,6 +171,9 @@
   [key val] (read-string val))
 
 (defmethod transform :low
+  [key val] (read-string val))
+
+(defmethod transform :vwap
   [key val] (read-string val))
 
 (defmethod transform :ask
@@ -333,20 +336,15 @@
            hpost
            :body)))
 
-(defn bitcoin-withdrawal 
-  [& {:keys [:amount :address] :as params}]
-  (-> :bitcoin_withdrawal
-      (hpost params)
-      :body 
-      (jsonify transform)))
-
-(defn bitcoin-deposit-address []
+(defn bitcoin-deposit-address 
+  []
   (-> :bitcoin_deposit_address
       hpost 
       :body 
       (jsonify transform)))
 
-(defn unconfirmed-bitcoin-deposits []
+(defn unconfirmed-bitcoin-deposits 
+  []
   (-> :unconfirmed_btc
       hpost 
       :body 
@@ -359,38 +357,23 @@
       :body 
       (jsonify transform)))
 
-(defn ripple-deposit-address []
+(defn ripple-deposit-address
+  []
   (-> :ripple_deposit_address
       hpost 
       :body 
       (jsonify transform)))
 
-;; (def ^{:dynamic true
-;;        :doc "Pusher key of for the bitstamp exchange"}
-;;   *pusher-api-key* "de504dc5763aeef9ff52")
+(defn call-with-account [acc thunk]
+  (binding [*key* (:key acc)
+            *secret* (:secret acc)
+            *client-id* (:client-id acc)]
+    (thunk)))
 
-;; (def pusher
-;;   ([] (pusher *pusher-api-key*))
-;;   ([key] (pusher/connect key)))
-
-;; (def ^:dynamic *order-book* 
-;;   {:channel "order_book"
-;;    :events ["data"]
-;;    })
-
-;; (defn order-book [pusher]
-;;   (pusher/subscribe pusher 
-;;                     (:channel *order-book*) 
-;;                     (:events *order-book*)))
-
-;; (defn call-with-account [acc thunk]
-;;   (binding [*key* (:key acc)
-;;             *secret* (:secret acc)
-;;             *client-id* (:client-id acc)]
-;;     (thunk)))
-
-;; (defmacro with-account [account & body]
-;;   `(call-with-account acc (fn [] ~@body)))
+(defmacro with-account
+  "adds to the subsequent API calls the account signature"
+  [account & body]
+  `(call-with-account acc (fn [] ~@body)))
 
 
 

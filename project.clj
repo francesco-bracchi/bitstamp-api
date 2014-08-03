@@ -1,4 +1,4 @@
-(defproject bitstamp-api "0.1.0"
+(defproject bitstamp-api "0.1.0.beta"
   :description "FIXME: write description"
   :url "https://github.com/francesco-bracchi/bitstamp-api"
   :license {:name "Eclipse Public License"
